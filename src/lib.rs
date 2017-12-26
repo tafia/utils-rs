@@ -18,16 +18,22 @@
 #![warn(trivial_casts, trivial_numeric_casts, unused, unused_extern_crates, unused_import_braces,
     unused_qualifications, unused_results, variant_size_differences)]
 
-extern crate rustc_serialize;
-extern crate rust_base58;
+//uses a copy of crate rust_base58 copied here locally due to a lack of serde support;
+
+#[macro_use]
+extern crate serde_derive;
+
+extern crate num;
 
 pub mod amount;
 pub mod wallet_address;
 pub mod location;
+pub mod base58;
 
 pub use amount::Amount;
 pub use wallet_address::{WALLET_ADDRESS_LEN, WalletAddress};
 pub use location::Address;
+pub use base58::FromBase58Error;
 
 /// The symbol of Fractal Global Credits
 ///

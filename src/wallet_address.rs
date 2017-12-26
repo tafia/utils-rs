@@ -9,10 +9,9 @@ use std::error::Error;
 use std::{fmt, str};
 use std::str::FromStr;
 
-use rust_base58::{ToBase58, FromBase58};
-use rust_base58::base58::FromBase58Error;
-#[cfg(feature = "json-types")]
-use rustc_serialize::json;
+use base58::FromBase58;
+use base58::ToBase58;
+use FromBase58Error;
 
 /// The wallet address size.
 ///
@@ -71,7 +70,7 @@ pub const WALLET_ADDRESS_LEN: usize = 7;
 ///
 /// assert_eq!(checksum, [0xAD, 0x07]);
 /// ```
-#[derive(Eq, PartialEq, PartialOrd, Ord, Debug, Clone, Copy, RustcEncodable, RustcDecodable)]
+#[derive(Eq, PartialEq, PartialOrd, Ord, Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct WalletAddress {
     address: [u8; WALLET_ADDRESS_LEN],
 }
@@ -149,15 +148,6 @@ impl FromStr for WalletAddress {
     }
 }
 
-#[cfg(feature = "json-types")]
-/// The `WalletAddress` type can easily be converted to json, using its `to_json()` method. Note
-/// that this will return a `Json::String` with the wallet address as a string in it.
-impl json::ToJson for WalletAddress {
-    fn to_json(&self) -> json::Json {
-        json::Json::String(format!("{}", self))
-    }
-}
-
 impl fmt::Display for WalletAddress {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut arr = [0u8; WALLET_ADDRESS_LEN + 2];
@@ -176,7 +166,7 @@ impl fmt::Display for WalletAddress {
 ///
 /// This struct represents a wallet address parsing error. It can be used to check the validity of
 /// wallet address strings, and implements common `Error` and `Display` traits.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WalletAddressParseError {
     description: String,
     cause: Option<FromBase58Error>,

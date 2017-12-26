@@ -20,24 +20,12 @@
 
 #![allow(trivial_numeric_casts)]
 
-use std::convert::From;
 use std::{fmt, str, u64};
-use std::str::FromStr;
-use std::result::Result;
 use std::error::Error;
 use std::ops::{Add, AddAssign, Sub, SubAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign};
 use std::num::ParseIntError;
 
-use rustc_serialize::{Encodable, Decodable, Encoder, Decoder};
-#[cfg(feature = "json-types")]
-use rustc_serialize::json;
-
 use super::CURRENCY_SYMBOL;
-
-// Largest amount value
-// pub const MAX: Amount = Amount::max_value();
-// Smallest amount value
-// pub const MIN: Amount = Amount::min_value();
 
 /// Fractal Global Credits amount
 ///
@@ -96,7 +84,7 @@ use super::CURRENCY_SYMBOL;
 /// let amount = Amount::from_repr(56); // 0.056
 /// assert_eq!(format!("{:.2}", amount), "0.06");
 /// ```
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Amount {
     value: u64,
 }
@@ -120,16 +108,6 @@ impl Amount {
     /// Returns the largest value that can be represented as a currency amount.
     pub fn max_value() -> Amount {
         Amount { value: u64::MAX }
-    }
-}
-
-#[cfg(feature = "json-types")]
-/// The Amount type can easily be converted to json, using its `to_json()` method. Note that this
-/// will print the amount as a float, with up to three decimals. In high amounts this can lead to
-/// unnacuracies when printed. This can be avoided by using the `Display` trait.
-impl json::ToJson for Amount {
-    fn to_json(&self) -> json::Json {
-        json::Json::F64(self.value as f64 / 1000.0)
     }
 }
 
@@ -211,17 +189,6 @@ pub struct AmountParseError {
     cause: Option<ParseIntError>,
 }
 
-impl AmountParseError {
-    fn new<S: AsRef<str>>(amount: S, error: S, cause: Option<ParseIntError>) -> AmountParseError {
-        AmountParseError {
-            description: format!("the amount {:?} is not a valid Fractal Global amount, {}",
-                                 amount.as_ref(),
-                                 error.as_ref()),
-            cause: cause,
-        }
-    }
-}
-
 impl fmt::Display for AmountParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.description)
@@ -241,104 +208,6 @@ impl Error for AmountParseError {
     }
 }
 
-impl FromStr for Amount {
-    type Err = AmountParseError;
-    fn from_str(s: &str) -> Result<Amount, AmountParseError> {
-        if s.contains('.') {
-            let parts = s.split('.').count();
-            let mut split = s.split('.');
-            match parts {
-                2 => {
-                    let units_str = split.next().unwrap();
-                    let units: u64 = if units_str != "" {
-                        match units_str.parse::<u64>() {
-                            Ok(u) => {
-                                if u <= u64::MAX / 1_000 {
-                                    u * 1_000
-                                } else {
-                                    return Err(AmountParseError::new(s,
-                                                &format!("it is too big, the maximum amount is {}",
-                                                Amount::max_value()), None));
-                                }
-                            }
-                            Err(e) => {
-                                return Err(AmountParseError::new(s,
-                                                                 "the units part it is not a \
-                                                                  valid u64 amount",
-                                                                 Some(e)))
-                            }
-                        }
-                    } else {
-                        0
-                    };
-                    let mut decimals_str = String::from(split.next().unwrap());
-                    if decimals_str.is_empty() {
-                        return Err(AmountParseError::new(s,
-                                                         "no decimals were found after the \
-                                                          decimal separator",
-                                                         None));
-                    }
-                    while decimals_str.len() < 3 {
-                        decimals_str.push('0');
-                    }
-                    let decimals: u64 = match decimals_str.parse() {
-                        Ok(d) => {
-                            if decimals_str.len() == 3 {
-                                d
-                            } else {
-                                let divisor = 10u64.pow(decimals_str.len() as u32 - 3);
-                                let rem = d % divisor;
-                                if rem >= divisor / 2 {
-                                    d / divisor + 1
-                                } else {
-                                    d / divisor
-                                }
-                            }
-                        }
-                        Err(_) => {
-                            return Err(AmountParseError::new(s,
-                                                             "the decimal part is not a valid \
-                                                              u64 number",
-                                                             None))
-                        }
-                    };
-
-                    if (u64::MAX - decimals) >= units {
-                        Ok(Amount::from_repr(units + decimals))
-                    } else {
-                        Err(AmountParseError::new(s,
-                                                  &format!("it is too big, the maximum amount \
-                                                            is {}",
-                                                           Amount::max_value()),
-                                                  None))
-                    }
-                }
-                _ => {
-                    Err(AmountParseError::new(s,
-                                              "an amount can only have one period to separate \
-                                               units and decimals",
-                                              None))
-                }
-            }
-        } else {
-            match s.parse::<u64>() {
-                Ok(v) => {
-                    if v <= u64::MAX / 1_000 {
-                        Ok(Amount::from_repr(v * 1_000))
-                    } else {
-                        Err(AmountParseError::new(s,
-                                                  &format!("it is too big, the maximum amount \
-                                                            is {}",
-                                                           Amount::max_value()),
-                                                  None))
-                    }
-                }
-                Err(_) => Err(AmountParseError::new(s, "it is not a valid u64 number", None)),
-            }
-        }
-    }
-}
-
 impl fmt::Debug for Amount {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
@@ -346,21 +215,6 @@ impl fmt::Debug for Amount {
                self.value,
                CURRENCY_SYMBOL,
                self)
-    }
-}
-
-impl Encodable for Amount {
-    fn encode<S: Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.emit_u64(self.value)
-    }
-}
-
-impl Decodable for Amount {
-    fn decode<D: Decoder>(d: &mut D) -> Result<Amount, D::Error> {
-        match d.read_u64() {
-            Ok(repr) => Ok(Amount::from_repr(repr)),
-            Err(e) => Err(e),
-        }
     }
 }
 
