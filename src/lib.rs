@@ -25,6 +25,9 @@ extern crate serde_derive;
 
 extern crate num;
 
+#[cfg(test)]
+extern crate rand;
+
 pub mod amount;
 pub mod wallet_address;
 pub mod location;
